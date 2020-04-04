@@ -1,0 +1,344 @@
+#!/usr/bin/perl
+# Leena Kahlon lkahlon@ucsc.edu
+use strict;
+use warnings; 
+use POSIX qw(strftime);
+$0 =~ s|.*/||;
+
+open INPUT, "< Makefile" or die "Can't open Makefile: $!";
+
+sub mtime ($) {
+   my ($filename) = @_;
+   my @stat = stat $filename;
+   return @stat ? $stat[9] : undef;
+}
+
+my %hh; my %h; my $i; my $isobs;
+my %mh; my $h; my $spec; my @spec;
+my %spec; my $k2; my $new_target; 
+my $i2; my $k3; my $i3; 
+my $check_perc;
+sub make {
+   my ($target) = @_;
+   my @cx; my @px;
+   my $newk; 
+   my $check = 0;
+   $check_perc = 0;
+   for my $k(keys %h){  
+      if ($k =~ /\%/){
+         $newk = $k;
+         $newk =~ s/\%//;
+         if ($newk =~ /./){
+            $newk =~ s/./\./;
+         }
+         if (index($target, $newk) != -1){
+            $new_target = $target;
+            $new_target =~ s/$newk$//;
+            @cx = $hh{$k};
+            @px = $h{$k};
+            for $i(0..((scalar @px)-1)) {
+               if ($h{$k}->[$i] =~ /\%/){
+                  $h{$k}->[$i] =~ s/\%/$new_target/;
+                  $k2 = $k;
+                  $i2 = $i;
+                  $check_perc = 1;
+               }
+            }
+            for $i(0..((scalar @cx)-1)) {
+               if ($hh{$k}->[$i] =~ /\%/){
+                  $hh{$k}->[$i] =~ s/\%/$new_target/;
+                  $k3 = $k;
+                  $i3 = $i;
+                  $check_perc = 1;
+               }
+            }
+            @cx = $hh{$k};
+            @px = $h{$k};
+            $check = 1;
+            $target = $k;
+         }
+      }
+   } 
+   if ($check == 0) { 
+   @cx = $hh{$target};
+   @px = $h{$target};
+   }
+   
+   if (-e $target) {
+   $isobs = 1;
+   my $mtime = mtime $target;
+   for $i(0..((scalar @px)-1)) {
+      my $prereq = $h{$target}->[$i];
+      while ((not(-e $prereq)) && 
+             (exists $hh{$prereq})) {
+         make($prereq); 
+      }
+      my $ptime = mtime $prereq;
+      if ($ptime < $mtime ){
+         $isobs = 0;
+      }     
+   }
+   } else {
+      $isobs = 1;
+      if (defined $h{$target}) {
+      if( ref($h{$target}) eq 'ARRAY' ) {
+      for $i(0..((scalar @px)-1)) {
+         my $prereq = $h{$target}->[$i];
+         if ($prereq =~ /\s/){
+            my $prereq_arr = [split ' ', $prereq];
+            for $i(0..@$prereq_arr-1){
+               if (not(-e $prereq_arr->[$i])){
+                  if (exists $hh{$prereq_arr->[$i]} &&
+                      exists $h{$prereq_arr->[$i]}) {
+                  if ($check_perc == 1){
+                     $h{$k2}->[$i2] =~ s/$new_target/\%/;
+                     $hh{$k3}->[$i3] =~ s/$new_target/\%/;
+                  }
+                  make($prereq_arr->[$i]);
+                  }
+               }
+            }
+         } else {
+         if (not(-e $prereq)) {
+            if (exists $hh{$prereq} &&
+                exists $h{$prereq}) {
+            if ($check_perc == 1){
+               $h{$k2}->[$i2] =~ s/$new_target/\%/;
+               $hh{$k3}->[$i3] =~ s/$new_target/\%/;
+            }
+            make($prereq);
+            }
+         }
+         }
+      }
+      }
+      
+      }
+   }
+   if( $isobs ) {
+   if (ref ($hh{$target}) eq 'ARRAY'){
+   if (defined $hh{$target}) {
+   for $i(0..((scalar @cx)-1)) {
+      my $cmd = $hh{$target}->[$i];
+      if ($cmd =~ /^@/){
+         $cmd =~ s/@//;
+         system $cmd;   
+      } elsif ($cmd =~ /^-/){
+         $cmd =~ s/-//;
+         print "$cmd\n";
+         system $cmd;
+         my $term_signal = $? & 0x7F;
+         my $exit_status = ($? >> 8) & 0xFF;
+         if (($term_signal != 0) || ($exit_status != 0)){
+            print ("pmake: [Makefile: $target] Error 1 (ignored)\n");
+         }
+      } else {
+         print "$cmd\n";
+         system $cmd;
+         my $term_signal = $? & 0x7F;
+         my $exit_status = ($? >> 8) & 0xFF;
+         if (($term_signal != 0) || ($exit_status != 0)){
+            exit;            
+         } 
+      }
+   }
+   }
+   }
+   } else {
+      print "pmake: '$target' is up to date.\n";
+   }
+}
+
+my $pa; my $k; my @pa;
+my $hh; my $ca; my $kk; 
+my $t; my @caa; my $sa; my $mh;
+my $newline;                          
+while (my $line = <INPUT>) {
+   chomp $line;
+   if ($line =~ /^#/){
+   } elsif ($line =~ /^[\s]*$/){
+   } elsif ($line =~ /^(\S+)\s*:(.*)/ | 
+            $line =~ /^\t/){
+      my @new_pa; my $new_pa;
+      my $p; 
+      if ($line =~ /^(\S+)\s*:(.*)/){
+      ($t, $p) = $line =~ /^(\S+)\s*:(.*)/;
+      my $ol;
+      $pa = [split ' ', $p];
+      if ($t =~ /^\$/){
+         my $ot;
+         $t =~ s/^\$//;
+         $t =~ s/^\{//;
+         $t =~ s/\}//;
+         $ot = $mh{$t};
+         my $new_ot = $ot->[0];
+         $t = $new_ot;
+         $newline = '';
+         for $i(0..@$pa-1){
+            if ($pa->[$i] =~ /\$/){
+               $ol = $pa->[$i];
+               $ol =~ s/\$//;
+               $ol =~ s/\{//;
+               $ol =~ s/\}//;
+               $ol = $mh{$ol};
+               for $i(0..(@$ol-1)){
+                  $newline .= $ol->[$i];
+                  unless($i == @$ol-1){
+                     $newline .= ' ';
+                  }
+               }
+            }
+            else {
+               $newline .= $pa->[$i];
+               unless($i == @$pa-1){
+                  $newline .= ' ';
+               }
+            }
+         }
+         for $i(0..@$pa-1){
+            push (@{$h{$new_ot}}, $newline);
+         }
+      } else {
+         $newline = '';
+         for $i(0..@$pa-1){
+            if ($pa->[$i] =~ /\$/){
+               $ol = $pa->[$i];
+               $ol =~ s/\$//;
+               $ol =~ s/\{//;
+               $ol =~ s/\}//;
+               $ol = $mh{$ol};
+               for $i(0..@$ol-1){
+                  $newline .= $ol->[$i];
+                  unless ($i == @$ol-1){
+                     $newline .= ' ';
+                  }
+               }
+            } else {
+               $newline .= $pa->[$i];
+               unless ($i == @$pa-1){
+                  $newline .= ' ';
+               } 
+            }    
+         }
+         my $check_empty = 0;
+         for $i(0..@$pa-1){
+            $check_empty = 1;
+            push (@{$h{$t}}, $newline);
+         }
+         if ($check_empty == 0){
+            $h{$t} = {};
+         }
+      }
+      @caa = ();
+      } elsif ($line =~ /^\t/) {
+         $line =~ s/\t//;
+         if ($line =~ /\$/) {
+            my $linearr; my @linearr;
+            $linearr = [split ' ', $line];
+            
+            for $i(0..(@$linearr-1)){
+               if($linearr->[$i] =~ /\$/){
+                  my $ol; my @ol;
+                  $ol = $linearr->[$i];
+                  $ol =~ s/\$//;
+                  if($ol =~ /\{/){
+                     $ol =~ s/\{//;
+                     $ol =~ s/\}//;
+                     if($ol =~ /.\//){
+                        $ol =~ s/.\///;
+                        $ol = $mh{$ol};   
+                     } else {
+                        $ol = $mh{$ol};
+                     }
+                  } else {
+                     @spec = ();
+                     if ($ol =~ /\</){
+                        $ol = $h{$t};     
+                     } else {
+                        my $a;
+                        $a->[0] = $ol;
+                        $spec{$t} = $a;
+                        $ol = $spec{$t};                   
+                     }
+                  }
+                  $newline = '';
+                  for $i(0..(@$ol-1)){
+                     $newline .= $ol->[$i];
+                     unless($i == @$ol-1){
+                        $newline .= ' ';
+                     }
+                  }
+                  $linearr->[$i] = $newline;
+               }
+            }
+            my $newestline = '';
+            for $i(0..(@$linearr-1)){
+               $newestline .= $linearr->[$i];
+               unless($i == @$linearr-1){
+                  $newestline .= ' ';
+               }
+            }
+            push (@{$hh{$t}}, $newestline);  
+          } else {
+            push (@{$hh{$t}}, $line);
+          }
+      } else {
+      }      
+   } elsif ($line =~ /^(\S+)\s+=(.*)/){
+      my $s; my $macro;
+      ($macro, $s) = $line =~ /^(\S+)\s+=(.*)/;
+      $sa = [split ' ', $s];
+      for $i(0..(@$sa-1)) {
+         if($sa->[$i] =~ /\$/){
+            $sa->[$i] =~ s/\$//;
+            $sa->[$i] =~ s/\{//;
+            $sa->[$i] =~ s/\}//;
+            my $nv = $mh{$sa->[$i]};
+            $sa->[$i] = '';
+            for my $j(0..(@$nv-1)) {
+               $sa->[$i] .= $nv->[$j];
+               unless($j == @$nv-1){
+                  $sa->[$i] .= ' ';
+               }
+            }
+         }
+      }
+      $mh{$macro} = $sa; 
+   } else {
+   }    
+}
+
+for $k(keys %h){
+   unless (exists $hh{$k}->[0]){
+      $hh{$k} = {};
+   }
+}
+
+close INPUT;
+
+open INPUT2, "< Makefile" or die "Can't open Makefile: $!";
+
+while (my $line = <INPUT2>) {
+   chomp $line;
+   
+   if ($line =~ /^#/){
+   } elsif ($line =~ /^[\s]*$/){
+   } elsif ($line =~ /^(\S+)\s+:(.*)/){
+      my $p;
+      ($t, $p) = $line =~ /^(\S+)\s+:(.*)/;
+      last;
+   } elsif ($line =~ /^\t/){
+   } else {
+   }
+}
+
+my $j;
+unless (exists $ARGV[0]){
+   make $t;
+} else { 
+   for $j(0..$#ARGV){
+      make $ARGV[$j];
+   }
+}
+
+close INPUT2;
